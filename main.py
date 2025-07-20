@@ -3,24 +3,25 @@ import json
 import os
 import matplotlib.pyplot as plt
 from pathlib import Path
+import argparse
 
 from download_data import DownloadData
 from create_chunks import CreateChunk
 from apply_decorators import ApplyDecorators
 
-DATA_PATH = "./data"
+DATA_PATH = Path("./data")
 
 # ----------- CREATE CHUNKS -----------
-RAW_VIDEO_ROOT   = Path("./raw_videos")        # original variable from your code
-RAW_ANNOT_ROOT   = Path("./raw_annot_videos")
+RAW_VIDEO_ROOT   = DATA_PATH / Path("./raw_videos")        # original variable from your code
+RAW_ANNOT_ROOT   = DATA_PATH / Path("./raw_annot_videos")
 EXTENSIONS       = [".mp4", ".mkv", ".mov"]         # whatever you support
 SECONDS_LIMIT    = 50                              # your existing guardrail
 MAX_WORKERS      = os.cpu_count() or 4              # reasonable default
 # -------------------------------------
 
 # ----------- APPLY DECORATORS -----------
-SAVE_ANNOT_ROOT     = Path("./annot_videos")
-CAPTION_FILE  = Path("captions.json")
+SAVE_ANNOT_ROOT     = DATA_PATH / Path("./annot_videos")
+CAPTION_FILE  = DATA_PATH / Path("captions.json")
 # ----------------------------------------
 
 
@@ -54,7 +55,7 @@ class CreateData:
                 print("key already present : ", key)
                 continue
 
-        train_val_annot_mp["database"][key] = test_annot_mp["database"][key]
+            train_val_annot_mp["database"][key] = test_annot_mp["database"][key]
         self.annot_mp = train_val_annot_mp.copy()
 
         # print stats
@@ -75,30 +76,30 @@ class CreateData:
         for video in self.annot_mp["database"]:
             annotations = self.annot_mp["database"][video]
 
-        if video not in self.video_annotations:
-            self.video_annotations[video] = []
+            if video not in self.video_annotations:
+                self.video_annotations[video] = []
 
-        for annotation in annotations["annotations"]:
-            temp = {}
-            temp["start"] = annotation["segment"][0]
-            temp["end"] = annotation["segment"][1]
-            temp["id"] = annotation["id"]
-            temp["sentence"] = annotation["sentence"]
-            temp["video"] = video
-            temp["subset"] = self.annot_mp["database"][video]["subset"]
-            temp["recipe_type"] = self.annot_mp["database"][video]["recipe_type"]
-            self.video_annotations[video].append(temp)
-
-            # stats
-            total_annotations += 1
-            length = temp["end"] - temp["start"]
-            annotation_length.append(length)
-            if temp["sentence"].strip() == "":
-                empty_captions += 1
-
-            if length > 50:
-                __outlier_annotation.append(temp)
-
+            for annotation in annotations["annotations"]:
+                temp = {}
+                temp["start"] = annotation["segment"][0]
+                temp["end"] = annotation["segment"][1]
+                temp["id"] = annotation["id"]
+                temp["sentence"] = annotation["sentence"]
+                temp["video"] = video
+                temp["subset"] = self.annot_mp["database"][video]["subset"]
+                temp["recipe_type"] = self.annot_mp["database"][video]["recipe_type"]
+                self.video_annotations[video].append(temp)
+    
+                # stats
+                total_annotations += 1
+                length = temp["end"] - temp["start"]
+                annotation_length.append(length)
+                if temp["sentence"].strip() == "":
+                    empty_captions += 1
+    
+                if length > 50:
+                    __outlier_annotation.append(temp)
+    
 
         print("*** Across YouCook2 Dataset ***")
         print("total annotations : ", total_annotations)
@@ -126,19 +127,70 @@ class CreateData:
                      raw_annot_root=RAW_ANNOT_ROOT,
                      extensions=EXTENSIONS,
                      seconds_limit=SECONDS_LIMIT,
-                     max_workers=MAX_WORKERS).run()
+                     max_workers=MAX_WORKERS,
+                     data_folder_path=DATA_PATH).run()
         
     def _apply_decorators(self):
         ApplyDecorators(raw_annot_root=RAW_ANNOT_ROOT,
                         save_annot_root=SAVE_ANNOT_ROOT,
                         caption_file_path=CAPTION_FILE,
-                        cpu_count=MAX_WORKERS).run()
+                        cpu_count=MAX_WORKERS,
+                       video_annotations=self.video_annotations).run()
+
+
+    def __str2bool(self, v: str) -> bool:
+        if v.lower() in ("yes", "true", "t", "1"):
+            return True
+        elif v.lower() in ("no", "false", "f", "0"):
+            return False
+        else:
+            raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+    def parse_args(self) -> argparse.Namespace:
+        parser = argparse.ArgumentParser(
+            description="Demo: optionally skip the data‑download step."
+        )
+    
+        parser.add_argument(
+            "--skip_download_data",
+            type=self.__str2bool,
+            nargs="?",
+            const=True,          # allows `--skip_download_data` (no value) → True
+            default=False,
+            help="Skip the data‑download step (true/false)."
+        )
+
+        parser.add_argument(
+            "--skip_create_chunks",
+            type=self.__str2bool,
+            nargs="?",
+            const=True,          # allows `--skip_download_data` (no value) → True
+            default=False,
+            help="Skip the chunk creation step (true/false)."
+        )
+
+        parser.add_argument(
+            "--skip_apply_decorators",
+            type=self.__str2bool,
+            nargs="?",
+            const=True,          # allows `--skip_download_data` (no value) → True
+            default=False,
+            help="Skip the apply decorators step (true/false)."
+        )
+            
+        return parser.parse_args()
 
 
 
-    def main(self,):
-        # STEP 1: download the data into disk
-        DownloadData(part="parta", save_folder=DATA_PATH).run()
+    def main(self, 
+             skip_download_data=False,
+             skip_create_chunks=False,
+             skip_apply_decorators=False):
+        
+        if not skip_download_data:
+            # STEP 1: download the data into disk
+            DownloadData(part="parta", save_folder=DATA_PATH).run()
 
         # STEP 2: Download the labels and annotations
         self.extract_labels_annotations()
@@ -147,16 +199,21 @@ class CreateData:
         self.annalyze_annotations()
 
         # STEP 4: Create chunks from videos
-        self._create_chunks_driver()
+        if not skip_create_chunks:
+            self._create_chunks_driver()
 
         # STEP 5: Apply Decorators
-        self._apply_decorators()
+        if not skip_apply_decorators:
+            self._apply_decorators()
 
         # STEP 6: 
 
 if __name__ == "__main__":
     C = CreateData()
-    C.main()
+    args = C.parse_args()
+    C.main(skip_download_data = args.skip_download_data,
+           skip_create_chunks = args.skip_create_chunks,
+           skip_apply_decorators = args.skip_apply_decorators)
         
 
 

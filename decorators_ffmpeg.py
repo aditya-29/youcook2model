@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import random
 
 REVERSE_SUFFIX = " in reverse"
 
@@ -22,6 +23,29 @@ def FFMPEG_SPEED(src: Path, dst: Path, factor: float, caption: str):
     return caption
   else:
     return caption + f" at {factor}x speed"
+
+def FFMPEG_RANDOM_PICK(
+    src1: Path, caption1: str,
+    src2: Path, caption2: str,
+    dst: Path,
+) -> str:
+    """
+    Randomly copies *either* ``src1`` *or* ``src2`` to ``dst`` (bit‑exact),
+    but the returned caption concatenates both: ``"caption1 caption2"``.
+    """
+    pick_src = random.choice([src1, src2])
+
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i", str(pick_src),
+            "-c", "copy",          # fast, loss‑less copy
+            str(dst),
+        ]
+    )
+
+    return f"{caption1} {caption2}"
 
 
 def ffmpeg_reverse(src: Path, dst: Path) -> None:
