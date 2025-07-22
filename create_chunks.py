@@ -27,7 +27,7 @@ class CreateChunk:
                  extensions, 
                  seconds_limit, 
                  max_workers,
-                 data_folder_path):
+                data_folder_path):
         self.video_annotations = video_annotations
         self.RAW_VIDEO_ROOT = raw_video_root
         self.RAW_ANNOT_ROOT = raw_annot_root
@@ -38,7 +38,7 @@ class CreateChunk:
 
     def find_source(self,video_name: str, any_annot: dict) -> Path | None:
         """Return the first existing file matching the video name + extension."""
-        stem_dir = self.DATA_FOLDER / self.RAW_VIDEO_ROOT / any_annot["subset"] / any_annot["recipe_type"]
+        stem_dir = self.RAW_VIDEO_ROOT / any_annot["subset"] / any_annot["recipe_type"]
         for ext in self.EXTENSIONS:
             p = stem_dir / f"{video_name}{ext}"
             if p.exists():
@@ -61,14 +61,14 @@ class CreateChunk:
     def process_one_video(self,video_name: str, annotations: list[dict]) -> None:
         src = self.find_source(video_name, annotations[0])
         if src is None:
-            LOGGER.warning("missing video file for %s", src)
+            # LOGGER.warning("missing video file for %s", src)
             return
 
         for ann in annotations:
             if ann["end"] - ann["start"] > self.SECONDS_LIMIT:
                 continue
 
-            dst_dir = self.DATA_FOLDER / self.RAW_ANNOT_ROOT / ann["subset"] / ann["recipe_type"]
+            dst_dir = self.RAW_ANNOT_ROOT / ann["subset"] / ann["recipe_type"]
             dst = dst_dir / f"{video_name}__{ann['id']}.mp4"
             try:
                 self.trim_with_ffmpeg(src, dst, ann["start"], ann["end"])

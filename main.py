@@ -24,6 +24,7 @@ SAVE_ANNOT_ROOT     = DATA_PATH / Path("./annot_videos")
 CAPTION_FILE  = DATA_PATH / Path("captions.json")
 # ----------------------------------------
 
+print("MAX WORKERS : ", MAX_WORKERS)
 
 class CreateData:
     def __init__(self, data_path=DATA_PATH):
@@ -178,19 +179,26 @@ class CreateData:
             default=False,
             help="Skip the apply decorators step (true/false)."
         )
+
+        parser.add_argument(
+            "--download_part",
+            help="download part"
+        )
+            
             
         return parser.parse_args()
 
 
 
     def main(self, 
+             download_part="parta",
              skip_download_data=False,
              skip_create_chunks=False,
              skip_apply_decorators=False):
         
         if not skip_download_data:
             # STEP 1: download the data into disk
-            DownloadData(part="parta", save_folder=DATA_PATH).run()
+            DownloadData(part=download_part, save_folder=DATA_PATH).run()
 
         # STEP 2: Download the labels and annotations
         self.extract_labels_annotations()
@@ -206,19 +214,20 @@ class CreateData:
         if not skip_apply_decorators:
             self._apply_decorators()
 
-        # STEP 6: 
+        # STEP 6: Save as frames
+        
 
 if __name__ == "__main__":
     C = CreateData()
     args = C.parse_args()
-    C.main(skip_download_data = args.skip_download_data,
+    C.main(download_part = args.download_part,
+           skip_download_data = args.skip_download_data,
            skip_create_chunks = args.skip_create_chunks,
            skip_apply_decorators = args.skip_apply_decorators)
         
 
 
         
-
 
 
 
