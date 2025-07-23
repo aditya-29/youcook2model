@@ -64,4 +64,3 @@ class DownloadData:
             os.system(cmd)
         
 
-

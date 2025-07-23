@@ -251,4 +251,3 @@ class CombineMask:
 
       return {"video": out[0], "caption": out[1]}
 
-

@@ -21,8 +21,8 @@ class Captions:
     @staticmethod
     # def random_pick(caption1: str, caption2: str, used_parts: list[int]):
     def random_pick(caption_ls: list[str], used_parts: list[int]):
-        used_parts = list(map(str, used_parts))
-        _prefix = "part {} of ".format(", ".join(used_parts+1))
+        used_parts = list(map(lambda x: str(x + 1), used_parts))  # convert to 1-based index
+        _prefix = "part {} of ".format(", ".join(used_parts))
         return _prefix + " ".join(caption_ls) 
 
 def _run(cmd: list[str]) -> None:
@@ -88,7 +88,7 @@ def ffmpeg_speed(src: Path, dst: Path, factor: float) -> None:
     factor = 1 --> copy
     factor > 1 --> fast     (2.0 => double‑speed)
     """
-    # Video: PTS scaling; Audio: atempo (supports 0.5 – 2.0 per filter)
+    # Video: PTS scaling; Audio: atempo (supports 0.5 – 2.0 per filter)
     if factor == 1.0:
         _run(
             [

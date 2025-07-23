@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# app.py – Streamlit UI for YouCook‑style decorator videos (enhanced ‑ merge explorer now in its own row)
+# app.py – Streamlit UI for YouCook‑style decorator videos (enhanced ‑ merge explorer now in its own row)
 #
 # Usage:   streamlit run app.py
 #
@@ -17,11 +17,11 @@ RAW_ROOT = Path("./data/annot_videos")          # training / validation / testin
 CAPTION_JSON = Path("./data/captions_all.json") # same format you used before
 TRANS_LABELS = {
     "ORIG": "Original",
-    "RR": "Random Reverse",
-    "RCS_x0_5": "Speed 0.5×",
-    "RCS_x1": "Speed 1×",
-    "RCS_x2": "Speed 2×",
-    "RP": "Random Part",
+    "RR": "Random Reverse",
+    "RCS_x0_5": "Speed 0.5×",
+    "RCS_x1": "Speed 1×",
+    "RCS_x2": "Speed 2×",
+    "RP": "Random Part",
 }
 
 # ────────────────────────────────
@@ -96,7 +96,7 @@ CATALOG = index_videos()
 # 3.  Streamlit UI
 # ────────────────────────────────
 st.set_page_config(page_title="Decorator Video Explorer", layout="wide")
-st.title("🎬 Decorator Video Explorer")
+st.title("🎬 Decorator Video Explorer")
 
 if not CATALOG:
     st.error("No *.mp4 files found under ‘annot_videos’.")
@@ -117,7 +117,7 @@ sel_trans = st.radio(
 vid_path = CATALOG[sel_base][sel_trans]
 
 # ────────────────────────────────
-# Row 1 – Preview & Caption
+# Row 1 – Preview & Caption
 # ────────────────────────────────
 col_v, col_c = st.columns([3, 2])
 with col_v:
@@ -130,10 +130,10 @@ with col_c:
     st.markdown(f"**{cap}**" if cap else "_Caption not found._")
 
 # ────────────────────────────────
-# Row 2 – Merge Explorer (if applicable)
+# Row 2 – Merge Explorer (if applicable)
 # ────────────────────────────────
 st.markdown("---")
-st.subheader("🧩 Merge Explorer")
+st.subheader("🧩 Merge Explorer")
 
 if "_mrg_" not in sel_base:
     st.info("Choose a clip whose name contains `_mrg_` to explore its component parts.")
@@ -158,7 +158,7 @@ else:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("#### Video 1")
+        st.markdown("#### Video 1")
         if vid1_path:
             st.video(str(vid1_path))
             st.markdown(f"**{cap1}**" if cap1 else "_no caption_")
@@ -166,7 +166,7 @@ else:
             st.text("clip not found")
 
     with col2:
-        st.markdown("#### Video 2")
+        st.markdown("#### Video 2")
         if vid2_path:
             st.video(str(vid2_path))
             st.markdown(f"**{cap2}**" if cap2 else "_no caption_")
@@ -174,7 +174,7 @@ else:
             st.text("clip not found")
 
     with col3:
-        st.markdown("#### Merged (RP)")
+        st.markdown("#### Merged (RP)")
         if merge_path:
             st.video(str(merge_path))
             st.markdown(f"**{cap_merge}**" if cap_merge else "_no caption_")

@@ -290,6 +290,8 @@ def convert_videos_to_old_structure(input_root: str,
         subset_path = input_path / s
         if subset_path.exists():
             for v in subset_path.glob("*/*.mp4"):
+                if "_tr_" not in str(v):
+                    continue
                 video_files.append({'path': v,
                                     'subset': s,
                                     'relative_path': str(v.relative_to(input_path))})
@@ -369,11 +371,13 @@ def create_frames_gpu(input_root: str,
                       output_root: str, 
                       fps: float = 2.0,
                        max_videos: int | None = None,
-                       verify: bool = False):
+                       verify: bool = False,
+                       raw_root_dir = None):
     convert_videos_to_old_structure(input_root = input_root,
                                     output_root = output_root,
                                     fps = fps,
-                                    max_videos = max_videos)
+                                    max_videos = max_videos,
+                                    raw_root_dir = raw_root_dir)
 
     if verify:
         verify_conversion(output_root)

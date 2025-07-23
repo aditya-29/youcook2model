@@ -17,7 +17,7 @@ TRANSFORMS: dict[str, callable[[Path, Path], None]] = {
 }
 
 CLIP_TRANSFORM = {
-    "2RP" : lambda s1, c1, s2, c2, d: FFMPEG_RANDOM_PICK(src1, caption1, src2, caption2, d)
+    "2RP" : lambda src1, caption1, src2, caption2, d: FFMPEG_RANDOM_PICK(src1, caption1, src2, caption2, d)
 }
 
 class ApplyDecorators:
@@ -35,7 +35,7 @@ class ApplyDecorators:
         
         self._caption_lookup()
         self._saved_keys: set[str] = set()     # track what’s already flushed
-
+        
         self.__internal_count = None
 
         # self._CAPTIONS_UTILS = Captions(annotations_json_path=self.CAPTION_FILE)
@@ -59,15 +59,16 @@ class ApplyDecorators:
             return False
 
     def update_caption_mp(self, path, caption):
-        if self.__internal_count == None:
-            self.__internal_count = 0
+        # ToDO: This is not optimized for performance. Implement Caching and IO optimizaton.
+        # if self.__internal_count == None:
+        #     self.__internal_count = 0
 
-        self.__internal_count += 1
+        # self.__internal_count += 1
         self.CAPTION_MAP[path] = caption
 
-        if self.__internal_count % 1000 == 0 or self.__internal_count == 1:
-            self.save_caption_mp()
-            self.CAPTION_MAP = {}
+        # if self.__internal_count % 1000 == 0 or self.__internal_count == 1:
+        self.save_caption_mp()
+        self.CAPTION_MAP = {}
 
     def save_caption_mp(self) -> None:
         """
@@ -128,7 +129,6 @@ class ApplyDecorators:
                 self.update_caption_mp(str(dst), generated_caption)
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] ffmpeg failed on {src_path} ({key}): {e}")
-            self.save_caption_mp()
 
     def process_clip_random_pick(self, pair: Tuple[Path, Path]) -> None:
         """
@@ -151,11 +151,12 @@ class ApplyDecorators:
         # ── Build destination path ───────────────────────────────
         #   • keep the original directory structure (subset/ID/…)
         #   • name:  <stem1>_<stem2>_tr_RP.mp4
-        dst = (
-            self.SAVE_ROOT
-            / src1.relative_to(self.RAW_ROOT).parent
-            / f"{src1.stem}_mrg_{src2.stem}_tr_RP.mp4"
-        )
+        # dst = (
+        #     self.SAVE_ROOT
+        #     / src1.relative_to(self.RAW_ROOT).parent
+        #     / f"{src1.stem}_mrg_{src2.stem}_tr_RP.mp4"
+        # )
+        dst = self.SAVE_ROOT / src1.relative_to(self.RAW_ROOT).with_stem(f"{src1.stem}_mrg_{src2.stem}_tr_RP")
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists():
             return                                    # already processed
@@ -167,12 +168,11 @@ class ApplyDecorators:
                 dst=dst,
             )
             # Store the new clip‑to‑caption mapping
-            self.update_caption_mp(str(dst.relative_to(self.SAVE_ROOT)), merged_caption)
+            self.update_caption_mp(str(dst), merged_caption)
     
         except subprocess.CalledProcessError as e:
             print(f"[WARN] ffmpeg failed on {src1} & {src2} (RP): {e}")
     
-        self.save_caption_mp()
 
     # ──────────────────────────────────────────────────────────────
     #  Dispatcher: sequential random‑pick within '__'‑groups
@@ -234,5 +234,7 @@ class ApplyDecorators:
                 desc="Processing clips"
             ):
                 pass
+            
+        self.save_caption_mp()  # flush any remaining captions
 
         

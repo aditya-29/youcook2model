@@ -10,7 +10,7 @@ from create_chunks import CreateChunk
 from apply_decorators import ApplyDecorators
 from create_frames_gpu import create_frames_gpu
 
-DATA_PATH = Path("./data")
+DATA_PATH = Path("/mnt/localssd")
 
 # ----------- CREATE CHUNKS -----------
 RAW_VIDEO_ROOT   = DATA_PATH / Path("./raw_videos")        # original variable from your code
@@ -146,7 +146,7 @@ class CreateData:
                        video_annotations=self.video_annotations).run()
 
     def _extract_frames(self):
-        create_frames_gpu(input_root=RAW_ANNOT_ROOT,
+        create_frames_gpu(input_root=SAVE_ANNOT_ROOT,
                       output_root=SAVE_FRAMES_ROOT,
                       fps=FPS,
                       max_videos=None,
@@ -212,7 +212,8 @@ class CreateData:
         parser.add_argument(
             "--max_videos",
             help="max videos",
-            default=10        )
+            default=3
+        )
             
             
         return parser.parse_args()
@@ -263,7 +264,6 @@ if __name__ == "__main__":
 
 
         
-
 
 
 

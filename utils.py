@@ -20,4 +20,3 @@ def get_caption_for_chunk(path, video_annotations):
             return video_annotations[video_name][iter]["sentence"] + suffix
 
     return None
-

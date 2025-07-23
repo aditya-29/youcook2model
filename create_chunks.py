@@ -81,8 +81,8 @@ class CreateChunk:
     def run(self, max_videos=None):
         if max_videos is None:
             max_videos = len(self.video_annotations)
-
+            
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as pool:
             work = (pool.submit(self.process_one_video, v_name, v_annots)
-                    for v_name, v_annots in dict(list(self.video_annotations.items()[:max_videos])[:max_videos]).items())
+                    for v_name, v_annots in dict(list(self.video_annotations.items())[:max_videos]).items())
             list(tqdm(work, total=len(self.video_annotations), desc="clipping"))
