@@ -29,7 +29,6 @@ CAPTION_FILE  = DATA_PATH / Path("captions.json")
 SAVE_FRAMES_ROOT = DATA_PATH / Path("./annot_frames")
 FPS = 2.0
 VERIFY = True
-MAX_VIDEOS = 10
 # -------------------------------------
 
 print("MAX WORKERS : ", MAX_WORKERS)
@@ -130,14 +129,14 @@ class CreateData:
         # plt.show()
         plt.savefig("./annotations_box_plot.png")
 
-    def _create_chunks_driver(self):
+    def _create_chunks_driver(self, max_videos):
         CreateChunk(video_annotations=self.video_annotations,
                      raw_video_root=RAW_VIDEO_ROOT,
                      raw_annot_root=RAW_ANNOT_ROOT,
                      extensions=EXTENSIONS,
                      seconds_limit=SECONDS_LIMIT,
                      max_workers=MAX_WORKERS,
-                     data_folder_path=DATA_PATH).run()
+                     data_folder_path=DATA_PATH).run(max_videos=max_videos)
         
     def _apply_decorators(self):
         ApplyDecorators(raw_annot_root=RAW_ANNOT_ROOT,
@@ -150,7 +149,7 @@ class CreateData:
         create_frames_gpu(input_root=RAW_ANNOT_ROOT,
                       output_root=SAVE_FRAMES_ROOT,
                       fps=FPS,
-                      max_videos=MAX_VIDEOS,
+                      max_videos=None,
                       verify=VERIFY,
                       raw_root_dir = DATA_PATH)
 
@@ -209,6 +208,12 @@ class CreateData:
             "--download_part",
             help="download part"
         )
+
+        parser.add_argument(
+            "--max_videos",
+            help="max videos",
+            default=10
+        )
             
             
         return parser.parse_args()
@@ -219,7 +224,8 @@ class CreateData:
              skip_download_data=False,
              skip_create_chunks=False,
              skip_apply_decorators=False,
-             skip_extract_frames=False):
+             skip_extract_frames=False, 
+             max_videos = None):
         
         if not skip_download_data:
             # STEP 1: download the data into disk
@@ -233,7 +239,7 @@ class CreateData:
 
         # STEP 4: Create chunks from videos
         if not skip_create_chunks:
-            self._create_chunks_driver()
+            self._create_chunks_driver(max_videos=max_videos)
 
         # STEP 5: Apply Decorators
         if not skip_apply_decorators:
@@ -252,7 +258,8 @@ if __name__ == "__main__":
            skip_download_data = args.skip_download_data,
            skip_create_chunks = args.skip_create_chunks,
            skip_apply_decorators = args.skip_apply_decorators,
-           skip_extract_frames = args.skip_extract_frames)
+           skip_extract_frames = args.skip_extract_frames,
+           max_videos = args.max_videos)
         
 
 

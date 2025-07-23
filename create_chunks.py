@@ -78,8 +78,11 @@ class CreateChunk:
     # ------------------------------------------------------------------
     # MAIN PARALLEL DRIVER
     # ------------------------------------------------------------------
-    def run(self):
+    def run(self, max_videos=None):
+        if max_videos is None:
+            max_videos = len(self.video_annotations)
+            
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as pool:
             work = (pool.submit(self.process_one_video, v_name, v_annots)
-                    for v_name, v_annots in self.video_annotations.items())
+                    for v_name, v_annots in self.video_annotations.items()[:max_videos])
             list(tqdm(work, total=len(self.video_annotations), desc="clipping"))
