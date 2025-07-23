@@ -36,6 +36,8 @@ class ApplyDecorators:
         self._caption_lookup()
         self._saved_keys: set[str] = set()     # track what’s already flushed
 
+        self.__internal_count = None
+
         # self._CAPTIONS_UTILS = Captions(annotations_json_path=self.CAPTION_FILE)
 
     def _caption_lookup(self):

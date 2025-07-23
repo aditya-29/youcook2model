@@ -22,7 +22,7 @@ class Captions:
     # def random_pick(caption1: str, caption2: str, used_parts: list[int]):
     def random_pick(caption_ls: list[str], used_parts: list[int]):
         used_parts = list(map(str, used_parts))
-        _prefix = "part {} of ".format(", ".join(used_parts))
+        _prefix = "part {} of ".format(", ".join(used_parts+1))
         return _prefix + " ".join(caption_ls) 
 
 def _run(cmd: list[str]) -> None:

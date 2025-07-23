@@ -212,8 +212,7 @@ class CreateData:
         parser.add_argument(
             "--max_videos",
             help="max videos",
-            default=10
-        )
+            default=10        )
             
             
         return parser.parse_args()
