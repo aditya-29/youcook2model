@@ -3,7 +3,6 @@ import subprocess
 import random
 
 REVERSE_SUFFIX = " in reverse"
-RANDOM_PICK_PREFIX = "part of "
 
 class Captions:
     @staticmethod
@@ -15,7 +14,7 @@ class Captions:
         if factor == 1.0:
             return caption
         else:
-            return caption + f" at {factor}x speed"
+            return caption + f", played at {factor}x speed"
         
 
     @staticmethod
@@ -23,7 +22,8 @@ class Captions:
     def random_pick(caption_ls: list[str], used_parts: list[int]):
         used_parts = list(map(lambda x: str(x + 1), used_parts))  # convert to 1-based index
         _prefix = "part {} of ".format(", ".join(used_parts))
-        return _prefix + " ".join(caption_ls) 
+        return _prefix + "(" + " ".join(caption_ls) + ")"
+    
 
 def _run(cmd: list[str]) -> None:
         """Run ffmpeg quietly; raise if it fails."""
@@ -42,30 +42,66 @@ def FFMPEG_SPEED(src: Path, dst: Path, factor: float, caption: str):
   ffmpeg_speed(src= src, dst= dst, factor= factor)
   return Captions.speed(caption, factor)
 
-def FFMPEG_RANDOM_PICK(
-    src1: Path, caption1: str,
-    src2: Path, caption2: str,
-    dst: Path,
-) -> str:
-    """
-    Randomly copies *either* ``src1`` *or* ``src2`` to ``dst`` (bit‑exact),
-    but the returned caption concatenates both: ``"caption1 caption2"``.
-    """
-    idx, pick_src = random.choice(list(enumerate([src1, src2])))
-    idx = [idx]
 
-    _run(
-        [
-            "ffmpeg",
-            "-y",
-            "-i", str(pick_src),
-            "-c", "copy",          # fast, loss‑less copy
-            str(dst),
+def FFMPEG_RANDOM_PICK(src1: str,
+                       caption1: str,
+                       src2: str,
+                       caption2: str, 
+                       dst):
+    """Randomly choose one of two merging options and execute"""
+
+    def get_video_duration(video_path):
+        """Get video duration in seconds using ffprobe"""
+        cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json", 
+            "-show_format", str(video_path)
         ]
-    )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        import json
+        data = json.loads(result.stdout)
+        return float(data['format']['duration'])
+    
+    # Get durations
+    vid1_duration = get_video_duration(src1)
+    vid2_duration = get_video_duration(src2)
+    
+    # Randomly choose option
+    # option = random.choice([1, 2])
+    option = 1
+    
+    if option == 0:
+        # Use filter_complex to cut and concatenate in one command
+        start_time = vid1_duration / 2
+        cmd = [
+            "ffmpeg", "-y", 
+            "-i", str(src1), 
+            "-i", str(src2),
+            "-filter_complex", 
+            f"[0:v]trim=start={start_time},setpts=PTS-STARTPTS[v0];"
+            f"[0:a]atrim=start={start_time},asetpts=PTS-STARTPTS[a0];"
+            f"[v0][a0][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
+            "-map", "[outv]", "-map", "[outa]",
+            str(dst)
+        ]
+        
+    else:        
+        # Use filter_complex to cut and concatenate in one command
+        duration = vid2_duration / 2
+        cmd = [
+            "ffmpeg", "-y", 
+            "-i", str(src1), 
+            "-i", str(src2),
+            "-filter_complex", 
+            f"[1:v]trim=duration={duration},setpts=PTS-STARTPTS[v1];"
+            f"[1:a]atrim=duration={duration},asetpts=PTS-STARTPTS[a1];"
+            f"[0:v][0:a][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
+            "-map", "[outv]", "-map", "[outa]",
+            str(dst)
+        ]
 
-    return Captions.random_pick(caption_ls = [caption1, caption2], used_parts=idx)
+    _run(cmd)
 
+    return Captions.random_pick(caption_ls = [caption1, caption2], used_parts=[option])
 
 def ffmpeg_reverse(src: Path, dst: Path) -> None:
     _run(
