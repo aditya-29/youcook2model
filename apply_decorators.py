@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 import random
 import fcntl           # advisory file‑lock (Linux / macOS)
-
+from typing import Tuple
 
 from decorators_ffmpeg import *
 from utils import *
@@ -57,13 +57,20 @@ class ApplyDecorators:
             return False
 
     def update_caption_mp(self, path, caption):
+        if self.__internal_count == None:
+            self.__internal_count = 0
+
+        self.__internal_count += 1
         self.CAPTION_MAP[path] = caption
+
+        if self.__internal_count % 1000 == 0 or self.__internal_count == 1:
+            self.save_caption_mp()
+            self.CAPTION_MAP = {}
 
     def save_caption_mp(self) -> None:
         """
-        Flush only *new* entries from self.CAPTION_MAP to disk in JSON‑Lines
-        format:  one tiny JSON object per line, append‑only.  A lightweight
-        file‑lock avoids inter‑process clobbering.
+        Load existing captions from file, update with new entries from CAPTION_MAP,
+        and save the complete updated data back to the file.
         """
         # 1. Collect items not yet persisted
         unsaved = {
@@ -72,18 +79,28 @@ class ApplyDecorators:
         if not unsaved:
             return                                  # nothing new
     
-        # 2. Append each entry as its own JSON line
-        with open(self.CAPTION_FILE, "a", encoding="utf‑8") as f:
-            # advisory lock so multiple workers won’t interleave writes
+        # 2. Load existing captions from file
+        existing_captions = {}
+        if self.CAPTION_FILE.exists() and self.CAPTION_FILE.stat().st_size > 0:
+            with open(self.CAPTION_FILE, "r", encoding="utf-8") as f:
+                try:
+                    existing_captions = json.load(f)
+                except json.JSONDecodeError:
+                    existing_captions = {}
+        
+        # 3. Update with new entries
+        existing_captions.update(unsaved)
+        
+        # 4. Save the complete updated data back to file
+        with open(self.CAPTION_FILE, "w", encoding="utf-8") as f:
+            # advisory lock so multiple workers won't interleave writes
             fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                for vid, caption in unsaved.items():
-                    f.write(json.dumps({"video": vid, "caption": caption},
-                                       ensure_ascii=False) + "\n")
+                json.dump(existing_captions, f, ensure_ascii=False, indent=2)
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
     
-        # 3. Mark these keys as flushed
+        # 5. Mark these keys as flushed
         self._saved_keys.update(unsaved.keys())
 
     def get_caption(self, path: Path) -> str:
@@ -105,8 +122,8 @@ class ApplyDecorators:
             if dst.exists():
                 continue  # already processed
             try:
-                caption = transform(src_path, dst, caption)
-                self.update_caption_mp(str(src_path), caption)
+                generated_caption = transform(src_path, dst, caption)
+                self.update_caption_mp(str(dst), generated_caption)
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] ffmpeg failed on {src_path} ({key}): {e}")
             self.save_caption_mp()

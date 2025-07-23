@@ -3,6 +3,27 @@ import subprocess
 import random
 
 REVERSE_SUFFIX = " in reverse"
+RANDOM_PICK_PREFIX = "part of "
+
+class Captions:
+    @staticmethod
+    def reverse(caption: str):
+        return caption + REVERSE_SUFFIX
+
+    @staticmethod
+    def speed(caption: str, factor: float):
+        if factor == 1.0:
+            return caption
+        else:
+            return caption + f" at {factor}x speed"
+        
+
+    @staticmethod
+    # def random_pick(caption1: str, caption2: str, used_parts: list[int]):
+    def random_pick(caption_ls: list[str], used_parts: list[int]):
+        used_parts = list(map(str, used_parts))
+        _prefix = "part {} of ".format(", ".join(used_parts))
+        return _prefix + " ".join(caption_ls) 
 
 def _run(cmd: list[str]) -> None:
         """Run ffmpeg quietly; raise if it fails."""
@@ -15,14 +36,11 @@ def _run(cmd: list[str]) -> None:
 
 def FFMPEG_REVERSE(src: Path, dst: Path, caption: str):
   ffmpeg_reverse(src= src, dst= dst)
-  return caption + REVERSE_SUFFIX
+  return Captions.reverse(caption)
 
 def FFMPEG_SPEED(src: Path, dst: Path, factor: float, caption: str):
   ffmpeg_speed(src= src, dst= dst, factor= factor)
-  if factor == 1.0:
-    return caption
-  else:
-    return caption + f" at {factor}x speed"
+  return Captions.speed(caption, factor)
 
 def FFMPEG_RANDOM_PICK(
     src1: Path, caption1: str,
@@ -33,7 +51,8 @@ def FFMPEG_RANDOM_PICK(
     Randomly copies *either* ``src1`` *or* ``src2`` to ``dst`` (bit‑exact),
     but the returned caption concatenates both: ``"caption1 caption2"``.
     """
-    pick_src = random.choice([src1, src2])
+    idx, pick_src = random.choice(list(enumerate([src1, src2])))
+    idx = [idx]
 
     _run(
         [
@@ -45,7 +64,7 @@ def FFMPEG_RANDOM_PICK(
         ]
     )
 
-    return f"{caption1} {caption2}"
+    return Captions.random_pick(caption_ls = [caption1, caption2], used_parts=idx)
 
 
 def ffmpeg_reverse(src: Path, dst: Path) -> None:

@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Optional
 from tqdm import tqdm
 
-RP_PREFIX = "part of "
+CAPTION_FILE = "./data/captions.json"
 
 # --------------------------------------------------------------
 # 0. GPU probe + FFmpeg helpers
@@ -240,20 +240,6 @@ def __modify_name(path):
 
 def get_caption_from_file(path: str, caption_mp) -> str | None:
     """Return caption for a transformed or raw clip path."""
-
-    # load the caption file
-    ac_path = path
-    if "raw_annot_videos" in path:
-        path = "raw_annot_videos/" + path.split("raw_annot_videos/")[-1]
-    elif "annot_videos/" in path:
-        path = "annot_videos/" + path.split("annot_videos/")[-1]
-
-    if path not in caption_mp:
-        if __modify_name(path) in caption_mp:
-            path = __modify_name(path)
-        else:
-            raise Exception(f"path not found : {path} :: {ac_path}")
-
     return caption_mp[path]
 
 # --------------------------------------------------------------
@@ -283,9 +269,6 @@ def _process_one(task: Tuple[int, dict, Path, Path, float, dict]) -> dict | Tupl
     caption = get_caption_from_file(str(video_path), caption_mp)
     class_id = video_path.parent.name
     split = {'training':'train','validation':'val','testing':'test'}.get(subset, subset)
-
-    if "_RP" in str(video_path) and caption.find(RP_PREFIX) != 0:
-        caption = RP_PREFIX + caption
     
     return {
         "video_dataset_name": get_dataset_name_from_path(video_path),
@@ -309,7 +292,7 @@ def convert_videos_to_old_structure(input_root: str,
     input_path  = Path(input_root)
     output_path = Path(output_root)
     (output_path / "videos").mkdir(parents=True, exist_ok=True)
-    with open("./data/captions_all.json", 'r') as file:
+    with open(CAPTION_FILE, 'r') as file:
         caption_mp = json.load(file)
 
     # Discover .mp4 files
@@ -393,6 +376,20 @@ def verify_conversion(output_root: str, num_samples: int = 5):
 # --------------------------------------------------------------
 # 6. CLI
 # --------------------------------------------------------------
+
+def create_frames_gpu(input_root: str,
+                      output_root: str, 
+                      fps: float = 2.0,
+                       max_videos: int | None = None,
+                       verify: bool = False):
+    convert_videos_to_old_structure(input_root = input_root,
+                                    output_root = output_root,
+                                    fps = fps,
+                                    max_videos = max_videos)
+
+    if verify:
+        verify_conversion(output_root)
+
 def main():
     parser = argparse.ArgumentParser(description='GPU‑accelerated video conversion')
     parser.add_argument('--input_root',  required=True, help='Input directory with training/validation/testing folders')
@@ -402,13 +399,11 @@ def main():
     parser.add_argument('--verify', action='store_true', help='Verify conversion after completion')
     args = parser.parse_args()
 
-    convert_videos_to_old_structure(args.input_root, args.output_root,
-                                    args.fps, args.max_videos)
-    if args.verify:
-        verify_conversion(args.output_root)
+    create_frames_gpu(input_root = args.input_root,
+                      output_root = args.output_root,
+                      fps = args.fps,
+                      max_videos = args.max_videos,
+                      verify = args.verify)
 
 if __name__ == "__main__":
     main()
-
-
-python convert_dataset_gpu_with_caption.py --input_root ./data/annot_videos --output_root ./data/annot_frames --fps 2 --max_videos 10    

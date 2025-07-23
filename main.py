@@ -8,6 +8,7 @@ import argparse
 from download_data import DownloadData
 from create_chunks import CreateChunk
 from apply_decorators import ApplyDecorators
+from create_frames_gpu import create_frames_gpu
 
 DATA_PATH = Path("./data")
 
@@ -23,6 +24,13 @@ MAX_WORKERS      = os.cpu_count() or 4              # reasonable default
 SAVE_ANNOT_ROOT     = DATA_PATH / Path("./annot_videos")
 CAPTION_FILE  = DATA_PATH / Path("captions.json")
 # ----------------------------------------
+
+# ----------- CREATE FRAMES -----------
+SAVE_FRAMES_ROOT = DATA_PATH / Path("./annot_frames")
+FPS = 2.0
+VERIFY = True
+MAX_VIDEOS = 10
+# -------------------------------------
 
 print("MAX WORKERS : ", MAX_WORKERS)
 
@@ -138,6 +146,13 @@ class CreateData:
                         cpu_count=MAX_WORKERS,
                        video_annotations=self.video_annotations).run()
 
+    def _extract_frames(self):
+        create_frames_gpu(input_root=RAW_ANNOT_ROOT,
+                      output_root=SAVE_FRAMES_ROOT,
+                      fps=FPS,
+                      max_videos=MAX_VIDEOS,
+                      verify=VERIFY)
+
 
     def __str2bool(self, v: str) -> bool:
         if v.lower() in ("yes", "true", "t", "1"):
@@ -181,6 +196,15 @@ class CreateData:
         )
 
         parser.add_argument(
+            "--skip_extract_frames",
+            type=self.__str2bool,
+            nargs="?",
+            const=True,          # allows `--skip_download_data` (no value) → True
+            default=False,
+            help="Skip the extract frames step (true/false)."
+        )
+
+        parser.add_argument(
             "--download_part",
             help="download part"
         )
@@ -189,12 +213,12 @@ class CreateData:
         return parser.parse_args()
 
 
-
     def main(self, 
              download_part="parta",
              skip_download_data=False,
              skip_create_chunks=False,
-             skip_apply_decorators=False):
+             skip_apply_decorators=False,
+             skip_extract_frames=False):
         
         if not skip_download_data:
             # STEP 1: download the data into disk
@@ -215,6 +239,9 @@ class CreateData:
             self._apply_decorators()
 
         # STEP 6: Save as frames
+        if not skip_extract_frames:
+            self._extract_frames()
+
         
 
 if __name__ == "__main__":
@@ -223,7 +250,8 @@ if __name__ == "__main__":
     C.main(download_part = args.download_part,
            skip_download_data = args.skip_download_data,
            skip_create_chunks = args.skip_create_chunks,
-           skip_apply_decorators = args.skip_apply_decorators)
+           skip_apply_decorators = args.skip_apply_decorators,
+           skio_extract_frames = args.skip_extract_frames)
         
 
 
