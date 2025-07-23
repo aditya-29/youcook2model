@@ -151,7 +151,8 @@ class CreateData:
                       output_root=SAVE_FRAMES_ROOT,
                       fps=FPS,
                       max_videos=MAX_VIDEOS,
-                      verify=VERIFY)
+                      verify=VERIFY,
+                      raw_root_dir = DATA_PATH)
 
 
     def __str2bool(self, v: str) -> bool:

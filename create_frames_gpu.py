@@ -13,7 +13,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Optional
 from tqdm import tqdm
 
-CAPTION_FILE = "./data/captions.json"
+CAPTION_FILE = "captions.json"
 
 # --------------------------------------------------------------
 # 0. GPU probe + FFmpeg helpers
@@ -208,22 +208,6 @@ def _run_ffmpeg_extract(src: Path, dst_dir: Path, fps: float) -> int:
 # 1. Caption lookup (YouCook2‑specific)
 # --------------------------------------------------------------
 # Adjust the path to your annotations file if needed
-ANNOT_JSON = "./data/youcookii_annotations_trainval.json"
-
-def load_video_annotations() -> Dict[str, List[Dict]]:
-    """Load video annotations with error handling."""
-    try:
-        with open(ANNOT_JSON, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"⚠️  Annotations file not found: {ANNOT_JSON}")
-        return {}
-    except json.JSONDecodeError:
-        print(f"⚠️  Invalid JSON in annotations file: {ANNOT_JSON}")
-        return {}
-
-video_annotations = load_video_annotations()
-
 
 def __modify_name(path):
     video_file = Path(path).name
@@ -288,11 +272,15 @@ def _process_one(task: Tuple[int, dict, Path, Path, float, dict]) -> dict | Tupl
 def convert_videos_to_old_structure(input_root: str,
                                     output_root: str,
                                     fps: float = 2.0,
-                                    max_videos: int | None = None):
+                                    max_videos: int | None = None,
+                                    raw_root_dir = None):
+    if raw_root_dir is None:
+        raise Exception("'raw_root_dir' cannot be None")
+    
     input_path  = Path(input_root)
     output_path = Path(output_root)
     (output_path / "videos").mkdir(parents=True, exist_ok=True)
-    with open(CAPTION_FILE, 'r') as file:
+    with open(os.path.join(raw_root_dir, CAPTION_FILE), 'r') as file:
         caption_mp = json.load(file)
 
     # Discover .mp4 files

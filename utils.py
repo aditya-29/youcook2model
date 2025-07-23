@@ -2,8 +2,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import json
 
-CAPTION_FILE = "./data/captions.json"
-
 def get_caption_for_chunk(path, video_annotations):
     path = str(path)
     suffix = ""
@@ -23,9 +21,3 @@ def get_caption_for_chunk(path, video_annotations):
 
     return None
 
-
-def get_caption_from_file(path: str):
-    with open(CAPTION_FILE, "r") as f:
-        captions = json.load(f)
-    return captions.get(path, None)
-    
