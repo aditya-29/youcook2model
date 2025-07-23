@@ -251,7 +251,7 @@ if __name__ == "__main__":
            skip_download_data = args.skip_download_data,
            skip_create_chunks = args.skip_create_chunks,
            skip_apply_decorators = args.skip_apply_decorators,
-           skio_extract_frames = args.skip_extract_frames)
+           skip_extract_frames = args.skip_extract_frames)
         
 
 
