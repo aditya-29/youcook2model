@@ -57,11 +57,11 @@ class CreateChunk:
             "-t", f"{duration}", "-c", "copy", str(dst)
         ]
         subprocess.run(cmd, check=True)
-
-    def process_one_video(self,video_name: str, annotations: list[dict]) -> None:
+        
+    def process_one_video(self, video_name: str, annotations: list[dict]) -> None:
         src = self.find_source(video_name, annotations[0])
         if src is None:
-            # LOGGER.warning("missing video file for %s", src)
+            LOGGER.warning("missing video file for %s", video_name)  # Added video_name
             return
 
         for ann in annotations:
@@ -78,11 +78,20 @@ class CreateChunk:
     # ------------------------------------------------------------------
     # MAIN PARALLEL DRIVER
     # ------------------------------------------------------------------
+    
     def run(self, max_videos=None):
         if max_videos is None:
             max_videos = len(self.video_annotations)
-            
+        
+        processed_videos = min(max_videos, len(self.video_annotations))
+        LOGGER.info(f"Processing {processed_videos} videos with {self.MAX_WORKERS} workers")
+        
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as pool:
             work = (pool.submit(self.process_one_video, v_name, v_annots)
                     for v_name, v_annots in dict(list(self.video_annotations.items())[:max_videos]).items())
-            list(tqdm(work, total=len(self.video_annotations), desc="clipping"))
+            list(tqdm(work, total=min(max_videos, len(self.video_annotations)), desc="clipping"))
+
+        # Optional: Count created chunks
+        chunk_count = len(list(self.RAW_ANNOT_ROOT.rglob("*.mp4")))
+        LOGGER.info(f"Chunk creation complete. Total chunks: {chunk_count}")
+    

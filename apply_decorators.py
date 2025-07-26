@@ -16,8 +16,9 @@ TRANSFORMS: dict[str, callable[[Path, Path], None]] = {
     "RCS_x2"  : lambda s, d, caption: FFMPEG_SPEED(s, d, 2.0, caption),
 }
 
+# Updated to use new temporal order function
 CLIP_TRANSFORM = {
-    "2RP" : lambda src1, caption1, src2, caption2, d: FFMPEG_RANDOM_PICK(src1, caption1, src2, caption2, d)
+    "TO" : lambda src1, caption1, src2, caption2, dst_ab, dst_ba: FFMPEG_TEMPORAL_ORDER(src1, caption1, src2, caption2, dst_ab, dst_ba)
 }
 
 class ApplyDecorators:
@@ -34,14 +35,11 @@ class ApplyDecorators:
         self.CPU_COUNT = cpu_count
         
         self._caption_lookup()
-        self._saved_keys: set[str] = set()     # track what’s already flushed
+        self._saved_keys: set[str] = set()     # track what's already flushed
         
         self.__internal_count = None
 
-        # self._CAPTIONS_UTILS = Captions(annotations_json_path=self.CAPTION_FILE)
-
     def _caption_lookup(self):
-
         # ------------------------------------------------------------------
         # 1.  Caption look‑up ‒ optional
         # ------------------------------------------------------------------
@@ -60,13 +58,7 @@ class ApplyDecorators:
 
     def update_caption_mp(self, path, caption):
         # ToDO: This is not optimized for performance. Implement Caching and IO optimizaton.
-        # if self.__internal_count == None:
-        #     self.__internal_count = 0
-
-        # self.__internal_count += 1
         self.CAPTION_MAP[path] = caption
-
-        # if self.__internal_count % 1000 == 0 or self.__internal_count == 1:
         self.save_caption_mp()
         self.CAPTION_MAP = {}
 
@@ -107,10 +99,9 @@ class ApplyDecorators:
         self._saved_keys.update(unsaved.keys())
 
     def get_caption(self, path: Path) -> str:
-            """Return caption text or empty string."""
-            return  get_caption_for_chunk(path = path,
-                                          video_annotations = self.video_annotations)
-
+        """Return caption text or empty string."""
+        return get_caption_for_chunk(path=path,
+                                   video_annotations=self.video_annotations)
 
     def process_clip(self, src_path: Path) -> None:
         # Skip files without a caption (optional; drop this if not needed)
@@ -130,10 +121,9 @@ class ApplyDecorators:
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] ffmpeg failed on {src_path} ({key}): {e}")
 
-    def process_clip_random_pick(self, pair: Tuple[Path, Path]) -> None:
+    def process_clip_temporal_order(self, pair: Tuple[Path, Path]) -> None:
         """
-        Randomly copies *one* of the two input videos to the destination while
-        merging their captions:  "caption1 caption2".
+        Creates both temporal orderings (A then B, B then A) from two input videos.
     
         Args
         ----
@@ -148,39 +138,42 @@ class ApplyDecorators:
         if cap1 == "" or cap2 == "":
             return                                    # skip if either missing
     
-        # ── Build destination path ───────────────────────────────
-        #   • keep the original directory structure (subset/ID/…)
-        #   • name:  <stem1>_<stem2>_tr_RP.mp4
-        # dst = (
-        #     self.SAVE_ROOT
-        #     / src1.relative_to(self.RAW_ROOT).parent
-        #     / f"{src1.stem}_mrg_{src2.stem}_tr_RP.mp4"
-        # )
-        dst = self.SAVE_ROOT / src1.relative_to(self.RAW_ROOT).with_stem(f"{src1.stem}_mrg_{src2.stem}_tr_RP")
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.exists():
+        # ── Build destination paths for both orderings ───────────────────────────────
+        # A then B version
+        dst_ab = self.SAVE_ROOT / src1.relative_to(self.RAW_ROOT).with_stem(f"{src1.stem}_mrg_{src2.stem}_tr_TO_AB")
+        # B then A version  
+        dst_ba = self.SAVE_ROOT / src1.relative_to(self.RAW_ROOT).with_stem(f"{src1.stem}_mrg_{src2.stem}_tr_TO_BA")
+        
+        dst_ab.parent.mkdir(parents=True, exist_ok=True)
+        dst_ba.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Skip if both already exist
+        if dst_ab.exists() and dst_ba.exists():
             return                                    # already processed
     
         try:
-            merged_caption = FFMPEG_RANDOM_PICK(
+            # This returns a tuple of (caption_ab, caption_ba)
+            caption_ab, caption_ba = FFMPEG_TEMPORAL_ORDER(
                 src1=src1, caption1=cap1,
                 src2=src2, caption2=cap2,
-                dst=dst,
+                dst_a_then_b=dst_ab,
+                dst_b_then_a=dst_ba,
             )
-            # Store the new clip‑to‑caption mapping
-            self.update_caption_mp(str(dst), merged_caption)
+            
+            # Store both clip‑to‑caption mappings
+            self.update_caption_mp(str(dst_ab), caption_ab)
+            self.update_caption_mp(str(dst_ba), caption_ba)
     
         except subprocess.CalledProcessError as e:
-            print(f"[WARN] ffmpeg failed on {src1} & {src2} (RP): {e}")
+            print(f"[WARN] ffmpeg failed on {src1} & {src2} (TO): {e}")
     
-
     # ──────────────────────────────────────────────────────────────
-    #  Dispatcher: sequential random‑pick within '__'‑groups
+    #  Dispatcher: sequential temporal order within '__'‑groups
     # ──────────────────────────────────────────────────────────────
-    def run_random_pick(self) -> None:
+    def run_temporal_order(self) -> None:
         """
         For every group of files that share the same prefix before the first
-        '__', build sequential pairs and feed them to `process_clip_random_pick`.
+        '__', build sequential pairs and feed them to `process_clip_temporal_order`.
         Example stems           → groups
            Qewsnks__1           → ["Qewsnks__1", "Qewsnks__2", "Qewsnks__3"]
            asdas_1              → ["asdas_1"]        (singletons ignored)
@@ -209,19 +202,22 @@ class ApplyDecorators:
     
         # 4. Fan out to the pool
         if not pairs:
-            print("[INFO] No eligible pairs for random‑pick.")
+            print("[INFO] No eligible pairs for temporal order.")
             return
     
         with mp.Pool(self.CPU_COUNT) as pool:
             for _ in tqdm(
-                pool.imap_unordered(self.process_clip_random_pick, pairs),
+                pool.imap_unordered(self.process_clip_temporal_order, pairs),
                 total=len(pairs),
-                desc="Random‑pick clips",
+                desc="Temporal‑order clips",
             ):
                 pass    
         
     def run(self):
-        self.run_random_pick()
+        # First run temporal order (replaces the old random_pick)
+        self.run_temporal_order()
+        
+        # Then run individual transforms
         all_mp4s = [
             p for p in self.RAW_ROOT.rglob("*.mp4")
             if "_tr_" not in p.stem
@@ -236,5 +232,3 @@ class ApplyDecorators:
                 pass
             
         self.save_caption_mp()  # flush any remaining captions
-
-        

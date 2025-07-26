@@ -54,7 +54,7 @@ class DownloadData:
                                extract_command_test])
         
     def run(self):
-        self._download_data()
+        # self._download_data()
         self._download_label_type()
         self._download_annotations()
 
@@ -63,4 +63,3 @@ class DownloadData:
             print(f"Running: {cmd}")
             os.system(cmd)
         
-

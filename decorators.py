@@ -250,4 +250,3 @@ class CombineMask:
                                          mask_ratio = self.mask_ratio)
 
       return {"video": out[0], "caption": out[1]}
-

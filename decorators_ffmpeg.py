@@ -2,106 +2,106 @@ from pathlib import Path
 import subprocess
 import random
 
-REVERSE_SUFFIX = " in reverse"
-
 class Captions:
     @staticmethod
     def reverse(caption: str):
-        return caption + REVERSE_SUFFIX
+        templates = [
+            f"{caption} in reverse",
+            f"a video of {caption} played in reverse",
+            f"{caption} played backwards",
+            f"reverse playback of {caption}",
+            f"{caption} shown in reverse order"
+        ]
+        return random.choice(templates)
 
     @staticmethod
     def speed(caption: str, factor: float):
         if factor == 1.0:
             return caption
+        elif factor < 1.0:
+            # Slow motion templates
+            templates = [
+                f"{caption}, played at {factor}x speed",
+                f"slow motion version of {caption}",
+                f"{caption} in slow motion",
+                f"{caption} slowed down to {factor}x speed",
+                f"{caption} at reduced speed"
+            ]
         else:
-            return caption + f", played at {factor}x speed"
-        
-
-    @staticmethod
-    # def random_pick(caption1: str, caption2: str, used_parts: list[int]):
-    def random_pick(caption_ls: list[str], used_parts: list[int]):
-        used_parts = list(map(lambda x: str(x + 1), used_parts))  # convert to 1-based index
-        _prefix = "part {} of ".format(", ".join(used_parts))
-        return _prefix + "(" + " ".join(caption_ls) + ")"
+            # Fast motion templates
+            templates = [
+                f"{caption}, played at {factor}x speed",
+                f"fast-forwarded {caption}",
+                f"{caption} in fast motion",
+                f"{caption} sped up to {factor}x speed",
+                f"{caption} at accelerated speed"
+            ]
+        return random.choice(templates)
     
+    @staticmethod
+    def temporal_order(caption1: str, caption2: str, order: str):
+        """Generate caption for temporal ordering"""
+        connectors = ["followed by", "then", "and then"]
+        connector = random.choice(connectors)
+        
+        if order == "A_then_B":
+            return f"{caption1} {connector} {caption2}"
+        else:  # B_then_A
+            return f"{caption2} {connector} {caption1}"
+
 
 def _run(cmd: list[str]) -> None:
-        """Run ffmpeg quietly; raise if it fails."""
-        subprocess.run(
-            cmd,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    """Run ffmpeg quietly; raise if it fails."""
+    subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 def FFMPEG_REVERSE(src: Path, dst: Path, caption: str):
-  ffmpeg_reverse(src= src, dst= dst)
-  return Captions.reverse(caption)
+    ffmpeg_reverse(src=src, dst=dst)
+    return Captions.reverse(caption)
 
 def FFMPEG_SPEED(src: Path, dst: Path, factor: float, caption: str):
-  ffmpeg_speed(src= src, dst= dst, factor= factor)
-  return Captions.speed(caption, factor)
+    ffmpeg_speed(src=src, dst=dst, factor=factor)
+    return Captions.speed(caption, factor)
 
-
-def FFMPEG_RANDOM_PICK(src1: str,
-                       caption1: str,
-                       src2: str,
-                       caption2: str, 
-                       dst):
-    """Randomly choose one of two merging options and execute"""
-
-    def get_video_duration(video_path):
-        """Get video duration in seconds using ffprobe"""
-        cmd = [
-            "ffprobe", "-v", "quiet", "-print_format", "json", 
-            "-show_format", str(video_path)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        import json
-        data = json.loads(result.stdout)
-        return float(data['format']['duration'])
+def FFMPEG_TEMPORAL_ORDER(src1: str, caption1: str, src2: str, caption2: str, dst_a_then_b: str, dst_b_then_a: str):
+    """
+    Generate both temporal orderings: A then B, and B then A
+    Returns a tuple of (caption_a_then_b, caption_b_then_a)
+    """
     
-    # Get durations
-    vid1_duration = get_video_duration(src1)
-    vid2_duration = get_video_duration(src2)
+    # Create A then B version
+    cmd_a_then_b = [
+        "ffmpeg", "-y",
+        "-i", str(src1),
+        "-i", str(src2),
+        "-filter_complex",
+        "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
+        "-map", "[outv]", "-map", "[outa]",
+        str(dst_a_then_b)
+    ]
+    _run(cmd_a_then_b)
     
-    # Randomly choose option
-    # option = random.choice([1, 2])
-    option = 1
+    # Create B then A version
+    cmd_b_then_a = [
+        "ffmpeg", "-y",
+        "-i", str(src2),
+        "-i", str(src1),
+        "-filter_complex",
+        "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
+        "-map", "[outv]", "-map", "[outa]",
+        str(dst_b_then_a)
+    ]
+    _run(cmd_b_then_a)
     
-    if option == 0:
-        # Use filter_complex to cut and concatenate in one command
-        start_time = vid1_duration / 2
-        cmd = [
-            "ffmpeg", "-y", 
-            "-i", str(src1), 
-            "-i", str(src2),
-            "-filter_complex", 
-            f"[0:v]trim=start={start_time},setpts=PTS-STARTPTS[v0];"
-            f"[0:a]atrim=start={start_time},asetpts=PTS-STARTPTS[a0];"
-            f"[v0][a0][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]",
-            "-map", "[outv]", "-map", "[outa]",
-            str(dst)
-        ]
-        
-    else:        
-        # Use filter_complex to cut and concatenate in one command
-        duration = vid2_duration / 2
-        cmd = [
-            "ffmpeg", "-y", 
-            "-i", str(src1), 
-            "-i", str(src2),
-            "-filter_complex", 
-            f"[1:v]trim=duration={duration},setpts=PTS-STARTPTS[v1];"
-            f"[1:a]atrim=duration={duration},asetpts=PTS-STARTPTS[a1];"
-            f"[0:v][0:a][v1][a1]concat=n=2:v=1:a=1[outv][outa]",
-            "-map", "[outv]", "-map", "[outa]",
-            str(dst)
-        ]
-
-    _run(cmd)
-
-    return Captions.random_pick(caption_ls = [caption1, caption2], used_parts=[option])
+    # Generate captions for both orderings
+    caption_a_then_b = Captions.temporal_order(caption1, caption2, "A_then_B")
+    caption_b_then_a = Captions.temporal_order(caption1, caption2, "B_then_A")
+    
+    return caption_a_then_b, caption_b_then_a
 
 def ffmpeg_reverse(src: Path, dst: Path) -> None:
     _run(
@@ -120,9 +120,9 @@ def ffmpeg_reverse(src: Path, dst: Path) -> None:
 
 def ffmpeg_speed(src: Path, dst: Path, factor: float) -> None:
     """
-    factor < 1 --> slow‑mo  (0.5 => half‑speed)
-    factor = 1 --> copy
-    factor > 1 --> fast     (2.0 => double‑speed)
+    factor < 1 --> slow‑mo  (0.5 => half‑speed)
+    factor = 1 --> copy
+    factor > 1 --> fast     (2.0 => double‑speed)
     """
     # Video: PTS scaling; Audio: atempo (supports 0.5 – 2.0 per filter)
     if factor == 1.0:
