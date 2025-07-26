@@ -315,7 +315,7 @@ def convert_videos_to_old_structure(input_root: str,
     print(f"Using {workers} workers")
 
     with ProcessPoolExecutor(max_workers=workers) as ex:
-        with tqdm(total=len(tasks), desc="Processing videos") as pbar:
+        with tqdm(total=len(tasks), desc="Creating Frames: ") as pbar:
             futures = [ex.submit(_process_one, task) for task in tasks]
             for fut in as_completed(futures):
                 res = fut.result()

@@ -191,6 +191,11 @@ class CreateData:
         else:
             raise argparse.ArgumentTypeError("Boolean value expected.")
 
+    def __int_or_none(self, value):
+        if value.lower() == 'none':
+            return None
+        return int(value)
+
     def parse_args(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser(
             description="YouCook2 Video Processing Pipeline with Enhanced Decorators"
@@ -240,7 +245,7 @@ class CreateData:
 
         parser.add_argument(
             "--max_videos",
-            type=int,
+            type=self.__int_or_none,
             default=3,
             help="Max number of videos to process (default: 3)"
         )

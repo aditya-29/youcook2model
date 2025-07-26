@@ -20,6 +20,7 @@ TRANSFORMS: dict[str, callable[[Path, Path], None]] = {
 CLIP_TRANSFORM = {
     "TO" : lambda src1, caption1, src2, caption2, dst_ab, dst_ba: FFMPEG_TEMPORAL_ORDER(src1, caption1, src2, caption2, dst_ab, dst_ba)
 }
+SAVE_INTERVAL = 100
 
 class ApplyDecorators:
     def __init__(self, 
@@ -106,8 +107,9 @@ class ApplyDecorators:
     def process_clip(self, src_path: Path) -> None:
         # Skip files without a caption (optional; drop this if not needed)
         caption = self.get_caption(str(src_path)).strip()
+        results = []
         if caption == "":
-            return
+            return results
 
         for iter, (key, transform) in enumerate(TRANSFORMS.items()):
             dst = (self.SAVE_ROOT / src_path.relative_to(self.RAW_ROOT)
@@ -117,9 +119,11 @@ class ApplyDecorators:
                 continue  # already processed
             try:
                 generated_caption = transform(src_path, dst, caption)
-                self.update_caption_mp(str(dst), generated_caption)
+                # self.update_caption_mp(str(dst), generated_caption)
+                results.append((str(dst), generated_caption))
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] ffmpeg failed on {src_path} ({key}): {e}")
+        return results
 
     def process_clip_temporal_order(self, pair: Tuple[Path, Path]) -> None:
         """
@@ -130,6 +134,7 @@ class ApplyDecorators:
         pair : (src_path1, src_path2)
             Two absolute paths inside `self.RAW_ROOT`.
         """
+        results = []
         src1, src2 = pair
     
         # ── Grab captions ─────────────────────────────────────────
@@ -149,7 +154,7 @@ class ApplyDecorators:
         
         # Skip if both already exist
         if dst_ab.exists() and dst_ba.exists():
-            return                                    # already processed
+            return []                                   # already processed
     
         try:
             # This returns a tuple of (caption_ab, caption_ba)
@@ -161,11 +166,15 @@ class ApplyDecorators:
             )
             
             # Store both clip‑to‑caption mappings
-            self.update_caption_mp(str(dst_ab), caption_ab)
-            self.update_caption_mp(str(dst_ba), caption_ba)
+            results.append((str(dst_ab), caption_ab))
+            results.append((str(dst_ba), caption_ba))
+            # self.update_caption_mp(str(dst_ab), caption_ab)
+            # self.update_caption_mp(str(dst_ba), caption_ba)
     
         except subprocess.CalledProcessError as e:
             print(f"[WARN] ffmpeg failed on {src1} & {src2} (TO): {e}")
+
+        return results
     
     # ──────────────────────────────────────────────────────────────
     #  Dispatcher: sequential temporal order within '__'‑groups
@@ -204,14 +213,27 @@ class ApplyDecorators:
         if not pairs:
             print("[INFO] No eligible pairs for temporal order.")
             return
+
+        buffer = []
     
         with mp.Pool(self.CPU_COUNT) as pool:
-            for _ in tqdm(
+            for result in tqdm(
                 pool.imap_unordered(self.process_clip_temporal_order, pairs),
                 total=len(pairs),
                 desc="Temporal‑order clips",
             ):
-                pass    
+                for path, caption in result:
+                    self.CAPTION_MAP[path] = caption
+                    buffer.append((path, caption))
+        
+                if len(buffer) >= SAVE_INTERVAL:
+                    self.save_caption_mp()
+                    buffer = []
+
+        # Final flush if buffer is non-empty
+        if buffer:
+            self.save_caption_mp()
+                    
         
     def run(self):
         # First run temporal order (replaces the old random_pick)
@@ -222,13 +244,23 @@ class ApplyDecorators:
             p for p in self.RAW_ROOT.rglob("*.mp4")
             if "_tr_" not in p.stem
         ]
+        buffer = []
 
         with mp.Pool(self.CPU_COUNT) as pool:
-            for _ in tqdm(
+            for result in tqdm(
                 pool.imap_unordered(self.process_clip, all_mp4s),
                 total=len(all_mp4s),
-                desc="Processing clips"
+                desc=f"Applying Transformations: {",".join(list(TRANSFORMS.keys()))}"
             ):
-                pass
+                for path, caption in result:
+                    self.CAPTION_MAP[path] = caption
+                    buffer.append((path, caption))
+        
+                if len(buffer) >= SAVE_INTERVAL:
+                    self.save_caption_mp()
+                    buffer = []
+
+        # Final flush if buffer is non-empty
+        if buffer:
+            self.save_caption_mp()
             
-        self.save_caption_mp()  # flush any remaining captions

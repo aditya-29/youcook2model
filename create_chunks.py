@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+import threading
 from functools import partial
 from tqdm import tqdm
 import subprocess
@@ -36,6 +37,10 @@ class CreateChunk:
         self.MAX_WORKERS = max_workers
         self.DATA_FOLDER = data_folder_path
 
+        # thread lock
+        self.lock = threading.Lock()
+        self.total_processed_videos = 0
+
     def find_source(self,video_name: str, any_annot: dict) -> Path | None:
         """Return the first existing file matching the video name + extension."""
         stem_dir = self.RAW_VIDEO_ROOT / any_annot["subset"] / any_annot["recipe_type"]
@@ -64,6 +69,9 @@ class CreateChunk:
             LOGGER.warning("missing video file for %s", video_name)  # Added video_name
             return
 
+        with self.lock:
+            self.total_processed_videos += 1
+
         for ann in annotations:
             if ann["end"] - ann["start"] > self.SECONDS_LIMIT:
                 continue
@@ -91,6 +99,11 @@ class CreateChunk:
                     for v_name, v_annots in dict(list(self.video_annotations.items())[:max_videos]).items())
             list(tqdm(work, total=min(max_videos, len(self.video_annotations)), desc="clipping"))
 
+        print("Total videos processed : ", self.total_processed_videos)
+
+        if self.total_processed_videos == 0:
+            raise Exception("[ERROR] : The total processed videos is 0, try increasing the --max_videos more to skip unavailable videos, if you are using 'part' download or else SOMETHING IS WRONG!!")
+        
         # Optional: Count created chunks
         chunk_count = len(list(self.RAW_ANNOT_ROOT.rglob("*.mp4")))
         LOGGER.info(f"Chunk creation complete. Total chunks: {chunk_count}")
