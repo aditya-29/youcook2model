@@ -227,7 +227,7 @@ class ApplyDecorators:
             for _ in tqdm(
                 pool.imap_unordered(self.process_clip, all_mp4s),
                 total=len(all_mp4s),
-                desc="Processing clips"
+                desc=f"Applying Transformations: {",".join(list(TRANSFORMS.keys()))}"
             ):
                 pass
             
