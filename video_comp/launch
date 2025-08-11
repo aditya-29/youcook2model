@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Setup Instructions for Video-Text Contrastive Learning
+
+echo "Setting up environment..."
+
+# 1. Install required packages
+pip install -r requirements.txt
+
+# 2. Create necessary directories
+mkdir -p checkpoints
+mkdir -p logs
+
+# 3. Verify GPU setup
+echo "Checking GPU setup..."
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU count: {torch.cuda.device_count()}')"
+
+echo "Setup complete!"
+
+# ============================================================================
+# FINAL COMMAND TO RUN TRAINING
+# ============================================================================
+
+# For 2x H100 NVL GPUs with accelerate:
+accelerate launch --config_file accelerate_config.yaml train_video_text.py \
+    --video_dir /mnt/localssd/video_comp/raw_chunks \
+    --caption_map /mnt/localssd/video_comp/caption_map.json \
+    --target_fps 5 \
+    --batch_size 8 \
+    --num_workers 8 \
+    --hidden_dim 512 \
+    --num_attention_heads 16 \
+    --dropout 0.1 \
+    --learning_rate 1e-4 \
+    --weight_decay 1e-5 \
+    --num_epochs 20 \
+    --save_dir ./checkpoints \
+    --seed 42
+
+# Alternative command without accelerate config (auto-detect setup):
+# accelerate launch --multi_gpu --num_processes 2 train_video_text.py [same args as above]
+
+# For single GPU testing:
+# python train_video_text.py [same args as above] --batch_size 4

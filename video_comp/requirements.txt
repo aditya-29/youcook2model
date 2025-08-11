@@ -2,3 +2,15 @@ opencv-python
 transformers
 matplotlib
 accelerate
+
+torch
+torchvision
+opencv-python
+numpy
+Pillow
+tqdm
+accelerate
+clip-by-openai
+transformers
+ftfy
+regex
