@@ -8,7 +8,7 @@ from create_chunks import CreateChunks
 from train_nn import TrainNN
 
 # ----- GLOBAL -----
-MAX_WORKERS = os.cpu_count() or 4              # reasonable default
+MAX_WORKERS = min(os.cpu_count() or 4, 32)              # reasonable default
 
 # ----- DOWNLOAD DATA -----
 DATA_PATH = Path("/mnt/localssd/video_comp")
@@ -27,6 +27,9 @@ NUM_EPOCHS = 3
 LR = 1E-3
 
 
+print("MAX WORKERS :: ", MAX_WORKERS)
+
+
 
 class CreateData:
     def __init__(self, ):
@@ -34,7 +37,7 @@ class CreateData:
 
 
     def parse_args(self,):
-        parser = argparse.ArgumentTypeError(
+        parser = argparse.ArgumentParser(
             description = "video comp processing"
         )
 

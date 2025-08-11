@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import pickle
 
+# Fix threading issues BEFORE importing heavy libraries
+os.environ['OMP_NUM_THREADS'] = '4'
+os.environ['OPENBLAS_NUM_THREADS'] = '4'
+os.environ['MKL_NUM_THREADS'] = '4'
+os.environ['NUMEXPR_NUM_THREADS'] = '4'
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -33,14 +39,14 @@ class Cfg:
     max_frames_per_video = None      # e.g. 256 to cap, or None for all sampled frames
     batch_size_embed = 128           # Increased batch size for embedding extraction
     batch_size_train = 512           # Increased batch size for training
-    num_workers = 8                  # Increased workers
+    num_workers = 4                  # Conservative worker count to avoid threading issues
     num_epochs = 3
     lr = 1e-3
     model_ckpt = "openai/clip-vit-base-patch32"
     seed = 42
     
     # Performance optimizations
-    use_fast_processor = True        # Enable fast processor
+    use_fast_processor = False       # Disable fast processor due to compatibility issues
     use_mixed_precision = True       # Enable mixed precision training
     prefetch_factor = 4              # Prefetch batches
     persistent_workers = True        # Keep workers alive between epochs
@@ -77,8 +83,7 @@ def sample_frames_by_fps(cap: cv2.VideoCapture, target_fps: float) -> List[np.nd
             break
             
         if (frame_count % stride) == 0:
-            # Resize frame to standard size to reduce memory usage
-            frame = cv2.resize(frame, (224, 224))  # CLIP expects 224x224
+            # Don't resize here - let CLIP processor handle it
             frames.append(frame)
             
         frame_count += 1
@@ -114,21 +119,28 @@ def compute_clip_image_embeddings(
     for i in range(0, len(pil_frames), batch_size):
         batch_frames = pil_frames[i:i+batch_size]
         
-        # Process batch
-        inputs = processor(
-            images=batch_frames, 
-            return_tensors="pt",
-            do_rescale=False,  # We already resized
-            do_normalize=True
-        ).to(device, non_blocking=True)
-        
-        # Use autocast for mixed precision
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
-            feats = clip.get_image_features(**inputs)
-        
-        # Normalize
-        feats = feats / feats.norm(dim=-1, keepdim=True)
-        embs.append(feats.detach().cpu().float())  # Convert back to float32 for storage
+        try:
+            # Process batch with simplified parameters
+            inputs = processor(
+                images=batch_frames, 
+                return_tensors="pt"
+            ).to(device, non_blocking=True)
+            
+            # Use autocast for mixed precision
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                feats = clip.get_image_features(**inputs)
+            
+            # Normalize
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+            embs.append(feats.detach().cpu().float())  # Convert back to float32 for storage
+            
+        except Exception as e:
+            print(f"[WARN] Error processing image batch {i}-{i+len(batch_frames)}: {e}")
+            # Skip this batch and continue
+            continue
+    
+    if len(embs) == 0:
+        return torch.empty(0, clip.config.projection_dim)
     
     return torch.cat(embs, dim=0)
 
@@ -146,9 +158,7 @@ def compute_clip_text_embedding(
     inputs = processor(
         text=caption, 
         return_tensors="pt", 
-        truncation=True,
-        padding=True,
-        max_length=77
+        truncation=True
     ).to(device, non_blocking=True)
     
     with torch.autocast(device_type='cuda', dtype=torch.float16):
@@ -307,21 +317,35 @@ class TrainNN:
 
     def _load_model(self):
         """Load CLIP model with optimizations."""
-        # Enable fast processor
-        processor = AutoProcessor.from_pretrained(
-            Cfg.model_ckpt, 
-            use_fast=Cfg.use_fast_processor
-        )
-        
-        clip = CLIPModel.from_pretrained(Cfg.model_ckpt)
-        clip.to(self.device)
-        clip.eval()
-        
-        # Enable optimizations
-        if hasattr(torch.backends.cudnn, 'benchmark'):
-            torch.backends.cudnn.benchmark = True
+        try:
+            # Try fast processor first, fallback to regular if it fails
+            if Cfg.use_fast_processor:
+                try:
+                    processor = AutoProcessor.from_pretrained(
+                        Cfg.model_ckpt, 
+                        use_fast=True
+                    )
+                    print("[INFO] Using fast CLIP processor")
+                except Exception as e:
+                    print(f"[WARN] Fast processor failed ({e}), falling back to regular processor")
+                    processor = AutoProcessor.from_pretrained(Cfg.model_ckpt)
+            else:
+                processor = AutoProcessor.from_pretrained(Cfg.model_ckpt)
+                print("[INFO] Using regular CLIP processor")
+            
+            clip = CLIPModel.from_pretrained(Cfg.model_ckpt)
+            clip.to(self.device)
+            clip.eval()
+            
+            # Enable optimizations
+            if hasattr(torch.backends.cudnn, 'benchmark'):
+                torch.backends.cudnn.benchmark = True
 
-        return clip, processor
+            return clip, processor
+        
+        except Exception as e:
+            print(f"[ERROR] Failed to load CLIP model: {e}")
+            raise
 
     def _load_caption(self):
         """Load and validate caption mapping."""
